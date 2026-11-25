@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="uz">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DORI TOP — Dorilarni qidirish va boshqarish platformasi</title>
+  <meta name="description" content="O‘zbekiston bo‘ylab dorilarni qidiring, dorixonalardagi narxlarni taqqoslang va eng yaqin dorixonani toping." />
+  <meta name="theme-color" content="#059669" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <script src="https://unpkg.com/lucide@0.460.0/dist/umd/lucide.min.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          fontFamily: { sans: ['Inter', 'system-ui', '-apple-system', 'sans-serif'] },
+          colors: {
+            brand: {
+              green: '#059669',
+              greenDark: '#047857',
+              blue: '#0284C7',
+              blueDark: '#0369A1'
+            }
+          }
+        }
+      }
+    };
+  </script>
+  <style>
+    html { scroll-behavior: smooth; }
+    body {
+      font-family: 'Inter', system-ui, -apple-system, sans-serif;
+      color: #0F172A;
+      background-color: #F1F5F9;
+      background-image:
+        radial-gradient(at 8% 12%, rgba(5, 150, 105, 0.14) 0px, transparent 48%),
+        radial-gradient(at 92% 10%, rgba(2, 132, 199, 0.16) 0px, transparent 50%),
+        radial-gradient(at 50% 95%, rgba(14, 165, 233, 0.10) 0px, transparent 55%),
+        linear-gradient(180deg, #FFFFFF 0%, #F1F5F9 100%);
+      background-attachment: fixed;
+    }
+    .glass {
+      background: rgba(255, 255, 255, 0.74);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid rgba(255, 255, 255, 0.88);
+      box-shadow: 0 10px 35px rgba(15, 23, 42, 0.06);
+    }
+    .glass-strong {
+      background: rgba(255, 255, 255, 0.86);
+      backdrop-filter: blur(24px);
+      -webkit-backdrop-filter: blur(24px);
+      border: 1px solid rgba(255, 255, 255, 0.95);
+      box-shadow: 0 16px 42px rgba(15, 23, 42, 0.08);
+    }
+    .glass-input {
+      background: rgba(255, 255, 255, 0.78);
+      border: 1px solid rgba(203, 213, 225, 0.8);
+      transition: all 0.18s ease;
+    }
+    .glass-input:focus {
+      background: #FFFFFF;
+      border-color: #0284C7;
+      box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.14);
+      outline: none;
+    }
+    .price-pin {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 5px 10px; border-radius: 9999px;
+      font-family: 'Inter', sans-serif; font-size: 12px; font-weight: 700;
+      white-space: nowrap; box-shadow: 0 4px 14px rgba(15, 23, 42, 0.22);
+      border: 2px solid #FFFFFF;
+    }
+    .price-pin-cheapest { background: #059669; color: #FFFFFF; }
+    .price-pin-normal { background: #0284C7; color: #FFFFFF; }
+    .price-pin-low { background: #D97706; color: #FFFFFF; }
+    .price-pin-out { background: #64748B; color: #FFFFFF; opacity: 0.9; }
+    .leaflet-div-icon { background: transparent !important; border: none !important; }
+    .leaflet-popup-content-wrapper { border-radius: 16px !important; }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(10px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    .animate-fade-up { animation: fadeUp 0.24s ease-out forwards; }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col overflow-x-hidden antialiased">
+
+  <!-- ===================================================================== -->
+  <!-- 1. AUTH GATE (SHOWN FIRST BEFORE ENTERING THE APP)                    -->
+  <!-- ===================================================================== -->
+  <section id="authGate" class="flex-1 flex items-center justify-center p-4 sm:p-6">
+    <div class="w-full max-w-md glass-strong rounded-3xl p-7 sm:p-9 animate-fade-up">
+      <div class="text-center mb-6">
+        <div class="w-14 h-14 rounded-2xl bg-gradient-to-br from-brand-green to-brand-blue text-white flex items-center justify-center mx-auto mb-3.5 shadow-lg shadow-emerald-600/20">
+          <i data-lucide="pill" class="w-7 h-7"></i>
+        </div>
+        <h1 class="text-2xl sm:text-3xl font-extrabold tracking-tight text-slate-900">
+          DORI <span class="text-brand-green">TOP</span>
+        </h1>
+        <p class="text-sm text-slate-500 mt-1.5">
+          Dorilarni qidirish va narxlarni taqqoslash platformasi
+        </p>
+      </div>
+
+      <button type="button" data-action="back-to-search" class="mb-4 text-xs font-semibold text-brand-blue hover:underline">← Qidiruvga qaytish</button>
+
+      <!-- Bootstrap hint when no admin exists yet -->
+      <div id="bootstrapBanner" class="hidden mb-5 p-3.5 rounded-2xl bg-sky-50/80 border border-sky-200/80 text-xs text-sky-900 leading-relaxed">
+        <div class="font-bold flex items-center gap-1.5 text-brand-blue mb-0.5">
+          <i data-lucide="shield-check" class="w-4 h-4"></i>
+          <span>Birinchi ishga tushirish</span>
+        </div>
+        Tizimda hali admin yo‘q (faqat ishlab chiqish rejimida). Birinchi ro‘yxatdan o‘tgan foydalanuvchi avtomatik <strong>Administrator</strong> bo‘ladi. Productionda <code>ADMIN_PHONE</code> orqali belgilanadi.
+      </div>
+
+      <div class="grid grid-cols-2 gap-1.5 bg-slate-200/60 p-1 rounded-2xl mb-6">
+        <button type="button" data-action="auth-tab" data-tab="login" id="authLoginTab"
+          class="py-2.5 rounded-xl text-sm font-bold transition bg-white text-slate-900 shadow-sm">
+          Kirish
+        </button>
+        <button type="button" data-action="auth-tab" data-tab="register" id="authRegisterTab"
+          class="py-2.5 rounded-xl text-sm font-bold transition text-slate-600 hover:text-slate-900">
+          Ro‘yxatdan o‘tish
+        </button>
+      </div>
+
+      <form id="authForm" class="space-y-4">
+        <div id="registerNameWrap" class="hidden">
+          <label for="authFullName" class="block text-xs font-semibold text-slate-600 mb-1.5">Ism-familiya</label>
+          <input type="text" id="authFullName" placeholder="Masalan: Jasur Karimov"
+            class="w-full px-4 py-3 rounded-xl glass-input text-sm font-medium" />
+        </div>
+        <div>
+          <label for="authPhone" class="block text-xs font-semibold text-slate-600 mb-1.5">Telefon raqami</label>
+          <input type="tel" id="authPhone" required placeholder="+998901234567"
+            class="w-full px-4 py-3 rounded-xl glass-input text-sm font-medium" />
+        </div>
+        <div>
+          <label for="authPassword" class="block text-xs font-semibold text-slate-600 mb-1.5">Parol (kamida 6 ta belgi)</label>
+          <input type="password" id="authPassword" required minlength="6" placeholder="••••••••"
+            class="w-full px-4 py-3 rounded-xl glass-input text-sm font-medium" />
+        </div>
+        <button type="submit" id="authSubmitBtn"
+          class="w-full py-3.5 rounded-xl bg-gradient-to-r from-brand-green to-brand-blue hover:opacity-95 text-white font-bold text-sm shadow-md shadow-sky-600/20 transition">
+          Tizimga kirish
+        </button>
+      </form>
+    </div>
+  </section>
+
+  <!-- ===================================================================== -->
+  <!-- 2. MAIN APPLICATION SHELL (SHOWN AFTER AUTHENTICATION)                -->
+  <!-- ===================================================================== -->
+  <div id="appShell" class="hidden flex-1 flex flex-col">
+    <!-- GLASS HEADER -->
+    <header class="sticky top-0 z-40 glass border-b border-white/80">
+      <div class="max-w-6xl mx-auto px-4 sm:px-6 h-16 flex items-center justify-between gap-3">
+        <button type="button" data-action="switch-page" data-page="search" class="flex items-center gap-2.5 text-left">
+          <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-brand-green to-brand-blue text-white flex items-center justify-center shadow-sm">
+            <i data-lucide="pill" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <div class="text-lg font-extrabold tracking-tight text-slate-900 leading-none">
+              DORI <span class="text-brand-green">TOP</span>
+            </div>
+            <div id="userRoleLabel" class="text-[11px] font-semibold text-brand-blue mt-0.5"></div>
+          </div>
+        </button>
+
+        <nav class="flex items-center gap-1.5 sm:gap-2 overflow-x-auto">
+          <button type="button" id="navSearchBtn" data-action="switch-page" data-page="search"
+            class="inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap">
+            <i data-lucide="search" class="w-4 h-4"></i><span>Qidiruv</span>
+          </button>
+          <button type="button" id="navApplyBtn" data-action="switch-page" data-page="apply"
+            class="hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap">
+            <i data-lucide="file-check-2" class="w-4 h-4"></i><span>Dorixona arizasi</span>
+          </button>
+          <button type="button" id="navPharmacyBtn" data-action="switch-page" data-page="pharmacy"
+            class="hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap">
+            <i data-lucide="building-2" class="w-4 h-4"></i><span>Dorixonam</span>
+          </button>
+          <button type="button" id="navAdminBtn" data-action="switch-page" data-page="admin"
+            class="hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold transition whitespace-nowrap">
+            <i data-lucide="shield" class="w-4 h-4"></i><span>Admin panel</span>
+          </button>
+          <button type="button" id="navLoginBtn" data-action="show-auth"
+            class="hidden inline-flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs sm:text-sm font-bold bg-brand-green text-white whitespace-nowrap">
+            <i data-lucide="log-in" class="w-4 h-4"></i><span>Kirish</span>
+          </button>
+          <button type="button" id="navLogoutBtn" data-action="logout" title="Chiqish"
+            class="inline-flex items-center gap-1 px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-slate-600 hover:bg-white/80 hover:text-rose-600 transition">
+            <i data-lucide="log-out" class="w-4 h-4"></i>
+          </button>
+        </nav>
+      </div>
+    </header>
+
+    <!-- PAGE A: SEARCH -->
+    <main id="searchPage" class="flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-7">
+      <div class="text-center max-w-2xl mx-auto mb-6">
+        <div id="liveStatsBadge" class="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full glass text-brand-green text-xs font-semibold mb-3">
+          <i data-lucide="database" class="w-3.5 h-3.5"></i><span>Yuklanmoqda...</span>
+        </div>
+        <h2 class="text-2xl sm:text-4xl font-extrabold text-slate-900 tracking-tight">
+          Kerakli dorini eng arzon va yaqin dorixonadan toping
+        </h2>
+      </div>
+
+      <!-- Glass Search Box -->
+      <div class="glass-strong rounded-3xl p-4 sm:p-5 mb-6">
+        <div class="flex flex-col md:flex-row gap-2.5">
+          <div class="relative flex-1">
+            <div class="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none text-slate-400">
+              <i data-lucide="search" class="w-5 h-5"></i>
+            </div>
+            <input type="text" id="searchInput" autocomplete="off"
+              placeholder="Dori nomi yoki ta'sir etuvchi moddani yozing..."
+              class="w-full pl-11 pr-10 py-3.5 text-base font-medium rounded-2xl glass-input" />
+            <button type="button" id="clearSearchBtn" data-action="clear-search"
+              class="hidden absolute inset-y-0 right-0 pr-3 flex items-center text-slate-400 hover:text-slate-600">
+              <i data-lucide="x-circle" class="w-5 h-5"></i>
+            </button>
+            <div id="autocompleteList"
+              class="hidden absolute left-0 right-0 top-full mt-2 glass-strong rounded-2xl overflow-hidden z-30 max-h-80 overflow-y-auto"></div>
+          </div>
+
+          <div class="flex gap-2">
+            <select id="citySelect" aria-label="Shahar"
+              class="flex-1 md:w-48 px-4 py-3.5 rounded-2xl glass-input text-sm font-semibold text-slate-800 cursor-pointer">
+              <option value="all">Barcha shaharlar</option>
+            </select>
+            <button type="button" data-action="find-nearby"
+              class="inline-flex items-center justify-center gap-2 px-4 py-3.5 rounded-2xl bg-brand-green hover:bg-brand-greenDark text-white font-semibold text-sm shadow-sm transition shrink-0">
+              <i data-lucide="navigation" class="w-4 h-4"></i>
+              <span class="hidden sm:inline">Yaqinimdagi</span>
+            </button>
+          </div>
+        </div>
+
+        <div id="popularChipsWrap" class="hidden mt-3.5 flex flex-wrap items-center gap-2">
+          <span class="text-xs font-semibold text-slate-500">Bazadagi dorilar:</span>
+          <div id="popularChips" class="flex flex-wrap items-center gap-1.5"></div>
+        </div>
+      </div>
+
+      <div id="medicinePassport" class="mb-5"></div>
+
+      <div id="controlsBar" class="hidden glass rounded-2xl p-3.5 mb-5">
+        <div class="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div class="flex flex-wrap items-center gap-2">
+            <button type="button" data-action="toggle-filter" data-filter="availableOnly" id="filterAvailableBtn" class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition">Faqat mavjudlar</button>
+            <button type="button" data-action="toggle-filter" data-filter="openNow" id="filterOpenBtn" class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition">Hozir ochiq</button>
+            <button type="button" data-action="toggle-filter" data-filter="is247" id="filter247Btn" class="px-3.5 py-2 rounded-xl text-xs sm:text-sm font-semibold border transition">Faqat 24/7</button>
+          </div>
+          <div class="flex flex-wrap items-center gap-2">
+            <div class="flex items-center gap-1 bg-slate-200/60 p-1 rounded-xl">
+              <button type="button" data-action="set-sort" data-sort="price" id="sortPriceBtn" class="px-3 py-1.5 rounded-lg text-xs font-semibold">Eng arzon</button>
+              <button type="button" data-action="set-sort" data-sort="distance" id="sortDistanceBtn" class="px-3 py-1.5 rounded-lg text-xs font-semibold">Eng yaqin</button>
+            </div>
+            <div class="flex items-center gap-1 bg-slate-200/60 p-1 rounded-xl">
+              <button type="button" data-action="set-view" data-view="list" id="viewListBtn" class="px-3 py-1.5 rounded-lg text-xs font-semibold">Ro‘yxat</button>
+              <button type="button" data-action="set-view" data-view="map" id="viewMapBtn" class="px-3 py-1.5 rounded-lg text-xs font-semibold">Xarita</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="resultSummaryBar" class="mb-3 text-sm text-slate-600"></div>
+      <div id="listViewContainer" class="space-y-3.5"></div>
+
+      <div id="mapViewContainer" class="hidden glass rounded-3xl overflow-hidden">
+        <div id="pharmacyMap" class="w-full h-[500px] z-10"></div>
+      </div>
+
+      <div id="analogsSection" class="mt-7"></div>
+    </main>
+
+    <!-- PAGE B: PHARMACY APPLICATION (For regular users -> Admin approves) -->
+    <main id="applyPage" class="hidden flex-1 max-w-4xl w-full mx-auto px-4 sm:px-6 py-7 space-y-6">
+      <div class="glass-strong rounded-3xl p-6 sm:p-7">
+        <div class="flex items-center gap-3 mb-4">
+          <div class="w-11 h-11 rounded-2xl bg-sky-50 text-brand-blue flex items-center justify-center">
+            <i data-lucide="file-check-2" class="w-5 h-5"></i>
+          </div>
+          <div>
+            <h1 class="text-xl sm:text-2xl font-extrabold text-slate-900">Dorixona ochishga ariza berish</h1>
+            <p class="text-xs sm:text-sm text-slate-500">Arizangiz Admin tomonidan tekshirilib tasdiqlangach, dorixona kabineti ochiladi.</p>
+          </div>
+        </div>
+
+        <form id="applyPharmacyForm" class="space-y-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Dorixona nomi *</label>
+              <input type="text" id="reqPhName" required placeholder="Masalan: Shifo Farm" class="w-full px-3.5 py-2.5 rounded-xl glass-input text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Litsenziya raqami *</label>
+              <input type="text" id="reqPhLicense" required placeholder="Masalan: UZ-PH-2026-0412" class="w-full px-3.5 py-2.5 rounded-xl glass-input text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Shahar *</label>
+              <input type="text" id="reqPhCity" required placeholder="Andijon / Toshkent" class="w-full px-3.5 py-2.5 rounded-xl glass-input text-sm" />
+            </div>
+            <div class="sm:col-span-2">
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Aniq manzil *</label>
+              <input type="text" id="reqPhAddress" required placeholder="Ko‘cha, uy raqami" class="w-full px-3.5 py-2.5 rounded-xl glass-input text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Dorixona telefoni *</label>
+              <input type="tel" id="reqPhPhone" required placeholder="+998 74 223 00 00" class="w-full px-3.5 py-2.5 rounded-xl glass-input text-sm" />
+            </div>
+          </div>
+
+          <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Kenglik (Lat) *</label>
+              <input type="number" step="any" id="reqPhLat" required value="40.7821" class="w-full px-3.5 py-2.5 rounded-xl glass-input text-sm" />
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-600 mb-1">Uzunlik (Lng) *</label>
+              <input type="number" step="any" id="reqPhLng" required value="72.3442" class="w-full px-3.5 py-2.5 rounded-xl glass-input text-sm" />
+            </div>
+            <label class="inline-flex items-center gap-2 pb-2.5 text-sm font-semibold text-slate-700">
+              <input type="checkbox" id="reqPh247" class="w-4 h-4 rounded" /> 24/7 ishlaydi
+            </label>
+            <div class="grid grid-cols-2 gap-2">
+              <input type="time" id="reqPhOpen" value="08:00" class="px-2.5 py-2 rounded-xl glass-input text-xs font-semibold" />
+              <input type="time" id="reqPhClose" value="22:00" class="px-2.5 py-2 rounded-xl glass-input text-xs font-semibold" />
+            </div>
+          </div>
+
+          <div>
+            <div class="text-xs font-semibold text-slate-500 mb-1.5">Xaritadan nuqtani bosib belgilang:</div>
+            <div id="applyPickerMap" class="w-full h-56 rounded-2xl border border-slate-200 z-10"></div>
+          </div>
+
+          <button type="submit" class="px-6 py-3 rounded-xl bg-brand-blue hover:bg-brand-blueDark text-white text-sm font-bold shadow-sm transition">
+            Arizani yuborish
+          </button>
+        </form>
+      </div>
+
+      <div class="glass rounded-3xl p-6">
+        <h2 class="text-base font-bold text-slate-900 mb-3">Mening arizalarim</h2>
+        <div id="myRequestsList" class="space-y-3"></div>
+      </div>
+    </main>
+
+    <!-- PAGE C: PHARMACY OWNER CABINET -->
+    <main id="pharmacyPage" class="hidden flex-1 max-w-5xl w-full mx-auto px-4 sm:px-6 py-7 space-y-6">
+      <div id="pharmacyCabinetContent" class="space-y-6"></div>
+    </main>
+
+    <!-- PAGE D: ADMIN PANEL -->
+    <main id="adminPage" class="hidden flex-1 max-w-6xl w-full mx-auto px-4 sm:px-6 py-7 space-y-6">
+      <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div class="text-xs font-bold uppercase tracking-wider text-brand-blue">Tizim boshqaruvi</div>
+          <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900">Admin Panel</h1>
+        </div>
+        <button type="button" data-action="toggle-admin-add-ph"
+          class="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-brand-green hover:bg-brand-greenDark text-white text-sm font-bold shadow-sm transition self-start">
+          <i data-lucide="plus" class="w-4 h-4"></i><span>Dorixona qo‘shish</span>
+        </button>
+      </div>
+
+      <!-- Admin Stats -->
+      <div id="adminStatsGrid" class="grid grid-cols-2 lg:grid-cols-5 gap-3.5"></div>
+
+      <!-- Direct Add Pharmacy Form for Admin -->
+      <div id="adminAddPhCard" class="hidden glass-strong rounded-3xl p-6">
+        <h2 class="text-base font-bold text-slate-900 mb-4">To‘g‘ridan-to‘g‘ri dorixona qo‘shish</h2>
+        <form id="adminCreatePharmacyForm" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <input type="text" id="admPhName" required placeholder="Dorixona nomi *" class="px-3.5 py-2.5 rounded-xl glass-input text-sm" />
+          <input type="text" id="admPhLicense" placeholder="Litsenziya raqami" class="px-3.5 py-2.5 rounded-xl glass-input text-sm" />
+          <input type="text" id="admPhCity" required placeholder="Shahar *" class="px-3.5 py-2.5 rounded-xl glass-input text-sm" />
+          <input type="text" id="admPhAddress" required placeholder="Manzil *" class="px-3.5 py-2.5 rounded-xl glass-input text-sm" />
+          <input type="tel" id="admPhPhone" required placeholder="Telefon *" class="px-3.5 py-2.5 rounded-xl glass-input text-sm" />
+          <input type="number" step="any" id="admPhLat" required value="40.7821" placeholder="Lat" class="px-3.5 py-2.5 rounded-xl glass-input text-sm" />
+          <input type="number" step="any" id="admPhLng" required value="72.3442" placeholder="Lng" class="px-3.5 py-2.5 rounded-xl glass-input text-sm" />
+          <select id="admPhOwner" class="px-3.5 py-2.5 rounded-xl glass-input text-sm font-semibold"></select>
+          <div class="sm:col-span-2 lg:col-span-4 flex flex-wrap items-center gap-3 pt-1">
+            <label class="inline-flex items-center gap-2 text-sm font-semibold"><input type="checkbox" id="admPh247" /> 24/7</label>
+            <input type="time" id="admPhOpen" value="08:00" class="px-3 py-2 rounded-xl glass-input text-xs font-semibold" />
+            <input type="time" id="admPhClose" value="22:00" class="px-3 py-2 rounded-xl glass-input text-xs font-semibold" />
+            <button type="submit" class="px-5 py-2.5 rounded-xl bg-brand-green text-white text-sm font-bold">Saqlash</button>
+          </div>
+        </form>
+      </div>
+
+      <!-- Pending & Reviewed Requests -->
+      <div class="glass rounded-3xl p-6">
+        <h2 class="text-lg font-extrabold text-slate-900 mb-4 flex items-center gap-2">
+          <i data-lucide="inbox" class="w-5 h-5 text-brand-blue"></i><span>Dorixona ochish arizalari</span>
+        </h2>
+        <div id="adminRequestsList" class="space-y-3"></div>
+      </div>
+
+      <!-- Users & Roles -->
+      <div class="glass rounded-3xl p-6 overflow-x-auto">
+        <h2 class="text-lg font-extrabold text-slate-900 mb-4 flex items-center gap-2">
+          <i data-lucide="users" class="w-5 h-5 text-brand-green"></i><span>Foydalanuvchilar va rollar</span>
+        </h2>
+        <div id="adminUsersList" class="divide-y divide-slate-200/70"></div>
+      </div>
+
+      <!-- Medicines management -->
+      <div class="glass rounded-3xl p-6">
+        <h2 class="text-lg font-extrabold text-slate-900 mb-4 flex items-center gap-2">
+          <i data-lucide="pill" class="w-5 h-5 text-brand-blue"></i><span>Dorilarni boshqarish</span>
+        </h2>
+        <input type="search" id="admMedSearch" placeholder="Dori nomi yoki ta'sir etuvchi modda bo‘yicha qidirish..." class="w-full px-3.5 py-2.5 rounded-xl glass-input text-sm mb-3" />
+        <div id="adminMedicinesList" class="divide-y divide-slate-200/70"></div>
+      </div>
+
+      <!-- Approved Pharmacies -->
+      <div class="glass rounded-3xl p-6">
+        <h2 class="text-lg font-extrabold text-slate-900 mb-4 flex items-center gap-2">
+          <i data-lucide="building-2" class="w-5 h-5 text-brand-blue"></i><span>Tasdiqlangan dorixonalar</span>
+        </h2>
+        <div id="adminPharmaciesList" class="divide-y divide-slate-200/70"></div>
+      </div>
+    </main>
+  </div>
+
+  <!-- CALL MODAL -->
+  <div id="callModal" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-sm">
+    <div class="glass-strong rounded-3xl max-w-md w-full p-6 animate-fade-up">
+      <div class="flex items-start justify-between gap-3 mb-4">
+        <div>
+          <h3 id="callModalTitle" class="text-lg font-bold text-slate-900"></h3>
+          <p id="callModalAddress" class="text-xs text-slate-500 mt-0.5"></p>
+        </div>
+        <button type="button" data-action="close-call-modal" class="text-slate-400 hover:text-slate-600 p-1">
+          <i data-lucide="x" class="w-5 h-5"></i>
+        </button>
+      </div>
+      <div class="bg-white/80 rounded-2xl p-4 border border-slate-200/80 text-center mb-4">
+        <div class="text-xs font-medium text-slate-500 mb-1">Dorixona telefoni</div>
+        <div id="callModalPhone" class="text-2xl font-extrabold text-slate-900"></div>
+        <div id="callModalHours" class="text-xs font-semibold text-brand-green mt-1.5"></div>
+      </div>
+      <div class="grid grid-cols-2 gap-2.5">
+        <button type="button" data-action="copy-phone" class="py-3 rounded-xl bg-white border border-slate-200 text-slate-800 text-sm font-semibold">Nusxalash</button>
+        <a id="callModalTelLink" href="tel:+998" class="py-3 rounded-xl bg-brand-green text-white text-sm font-semibold text-center">Qo‘ng‘iroq</a>
+      </div>
+    </div>
+  </div>
+
+  <!-- TOAST -->
+  <div id="toastContainer" class="fixed bottom-5 right-5 z-50 flex flex-col gap-2 max-w-sm w-[calc(100%-2.5rem)] pointer-events-none"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>
